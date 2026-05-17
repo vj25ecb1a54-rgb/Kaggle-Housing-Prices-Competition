@@ -7,22 +7,13 @@ from sklearn.linear_model import RidgeCV
 from sklearn.preprocessing import LabelEncoder
 from sklearn.model_selection import cross_val_score
 
-# ─────────────────────────────────────────────
-# 1. LOAD DATA
-# ─────────────────────────────────────────────
 train = pd.read_csv("C:/Users/vikas/Downloads/train (1).csv")
 test  = pd.read_csv("C:/Users/vikas/Downloads/test.csv")
 
-# ─────────────────────────────────────────────
-# 2. OUTLIER REMOVAL
-# ─────────────────────────────────────────────
 train = train.drop(train[
     (train['GrLivArea'] > 4000) & (train['SalePrice'] < 300000)
 ].index)
 
-# ─────────────────────────────────────────────
-# 3. FEATURE ENGINEERING
-# ─────────────────────────────────────────────
 def add_features(df):
     df = df.copy()
 
@@ -57,9 +48,6 @@ def add_features(df):
 train = add_features(train)
 test  = add_features(test)
 
-# ─────────────────────────────────────────────
-# 4. FEATURE LISTS
-# ─────────────────────────────────────────────
 num_features = [
     "LotArea", "LotFrontage",
     "OverallQual", "OverallCond", "QualCond",
@@ -95,20 +83,14 @@ X_train = train[all_features].copy()
 X_test  = test[all_features].copy()
 y_train = np.log1p(train["SalePrice"])
 
-# ─────────────────────────────────────────────
-# 5. PREPROCESSING
-# ─────────────────────────────────────────────
 cat_cols_present = [c for c in cat_features if c in all_features]
 num_cols_present = [c for c in num_features if c in all_features]
 
-# Numeric: fill with train median
 for col in num_cols_present:
     median = X_train[col].median()
     X_train[col] = X_train[col].fillna(median)
     X_test[col]  = X_test[col].fillna(median)
 
-# Categorical: fill NaN then label-encode
-# Fit on train+test combined so unseen test labels don't crash
 for col in cat_cols_present:
     X_train[col] = X_train[col].fillna("None").astype(str)
     X_test[col]  = X_test[col].fillna("None").astype(str)
@@ -120,12 +102,8 @@ for col in cat_cols_present:
     X_train[col] = le.transform(X_train[col])
     X_test[col]  = le.transform(X_test[col])
 
-# All columns are now numeric — safe for every sklearn estimator
 print(f"Features: {X_train.shape[1]} | Train rows: {X_train.shape[0]}")
 
-# ─────────────────────────────────────────────
-# 6. MODELS
-# ─────────────────────────────────────────────
 xgb = XGBRegressor(
     n_estimators     = 2000,
     learning_rate    = 0.02,
@@ -163,9 +141,6 @@ gbr = GradientBoostingRegressor(
     random_state  = 42,
 )
 
-# ─────────────────────────────────────────────
-# 7. STACKING
-# ─────────────────────────────────────────────
 stacker = StackingRegressor(
     estimators      = [("xgb", xgb), ("lgb", lgb), ("gbr", gbr)],
     final_estimator = RidgeCV(alphas=[0.1, 1.0, 10.0, 100.0]),
@@ -174,9 +149,6 @@ stacker = StackingRegressor(
     n_jobs          = -1,
 )
 
-# ─────────────────────────────────────────────
-# 8. CROSS-VALIDATE
-# ─────────────────────────────────────────────
 print("Running 5-fold CV … (takes a few minutes)")
 cv_scores = cross_val_score(
     stacker, X_train, y_train,
@@ -184,12 +156,8 @@ cv_scores = cross_val_score(
 )
 print(f"CV RMSE (log scale): {-cv_scores.mean():.5f} ± {cv_scores.std():.5f}")
 
-# ─────────────────────────────────────────────
-# 9. FIT & PREDICT
-# ─────────────────────────────────────────────
 stacker.fit(X_train, y_train)
 final_preds = np.expm1(stacker.predict(X_test))
 
 submission = pd.DataFrame({"Id": test["Id"], "SalePrice": final_preds})
-submission.to_csv("submission_improved.csv", index=False)
-print("Saved submission_improved.csv")
+submission.to_csv("submission11.csv", index=False)
